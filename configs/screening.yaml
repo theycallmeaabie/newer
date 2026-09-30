@@ -1,0 +1,86 @@
+# Screening configuration: dynamic limits, safety slope, decision thresholds, evaluation costs.
+#
+# Phase 0: structure and provisional values. Thresholds get tuned on VALIDATION lots in Phase 4
+# to meet `evaluation.recall_target`; the resulting FP rate is reported, not tuned away.
+
+checkpoints_h: [0, 24, 96, 168]
+early_rejection_checkpoint_h: 24
+
+parameters:
+  # Currents are log-normal: statistics are computed on log(value). Delay is close to normal.
+  IDDQ:  { unit: uA, log_space: true }
+  ILEAK: { unit: uA, log_space: true }
+  TPD:   { unit: ns, log_space: false }
+
+robust_stats:
+  mad_scale: 1.4826           # sigma_robust = 1.4826 * MAD (consistent with sigma for a normal)
+  min_parts_for_lot_stats: 8  # below this, shrink fully toward historical priors
+  # Guards MAD = 0 (quantised readings). Relative floor on sigma_robust, applied in the parameter's
+  # working space: ln(1 + f) for log-space parameters (unit-independent), f * |median| for linear
+  # ones. Must stay well below the smallest natural spread (generator TPD ~ 4.5 %).
+  mad_floor_fraction: 0.01
+
+module_a:
+  dynamic_pat:
+    k_review: 4.0             # robust z beyond which a part goes to REVIEW
+    k_reject: 6.0             # robust z beyond which a part goes to REJECT
+  delta_limits:
+    k_review: 4.0
+    k_reject: 6.0
+  multivariate:
+    min_lot_size: 30          # MinCovDet needs enough rows; below this the check is skipped and noted
+    support_fraction: 0.75
+    chi2_quantile_review: 0.999
+    chi2_quantile_reject: 0.99999
+  lot_checks:
+    small_lot_threshold: 30   # results on smaller lots are marked "low confidence"
+    shrinkage_prior_weight: 20  # pseudo-count of historical parts blended into small-lot stats
+    whole_lot_shift_z: 3.0    # lot median vs history -> lot-level alert, not per-part flags
+  isolation_forest:
+    enabled: false            # secondary signal only; kept only if it improves recall at equal FP
+    n_estimators: 200
+    contamination: auto
+
+module_b:
+  predictors: [persistence, lot_ratio, power_law, lightgbm]
+  power_law:
+    exponent_prior_weight: 2.0
+  lightgbm:
+    quantiles: [0.5, 0.95]
+    seed: 20260170
+    num_threads: 4
+    deterministic: true
+    use_96h_auxiliary_target: true
+  conformal:
+    target_coverage: 0.95
+    # Group-conditional bins on the 24h robust z. YAML spells infinity `.inf` (plain `inf` is a string).
+    mondrian_bins_z24: [-.inf, 2.0, 4.0, .inf]
+  safety_slope:
+    # S_delta = max(abs_delta, pct_delta * V0) / (t_last - t_0), t_last = 168 h by default.
+    # Mirrors post-burn-in delta criteria ("X uA or Y %, whichever is greater").
+    # TODO(Phase 3): cite the standard/spec the delta values are modelled on.
+    delta_limits:
+      IDDQ:  { abs_delta: 5.0,  pct_delta: 0.25 }
+      ILEAK: { abs_delta: 0.5,  pct_delta: 0.25 }
+      TPD:   { abs_delta: 0.5,  pct_delta: 0.05 }
+    population_k: 4.0         # S_pop = median(r) + k * sigma_robust(r) over historical lots
+    flag_on: upper_bound      # flag on the interval's upper bound, never the point estimate
+
+fusion:
+  # Margins are in units of the relevant threshold (e.g. z / k_reject). Tuned in Phase 4.
+  reject_margin: 1.0
+  review_margin: 0.7
+  low_confidence_lot_to_review: true
+
+evaluation:
+  recall_target: 0.99         # applies to the FINAL decision after all readings
+  confidence_level: 0.95      # Wilson intervals on recall and FP rate
+  costs:
+    false_negative: 100.0     # an escaped latent defect
+    false_positive: 1.0       # a good part rejected
+  min_defective_parts_in_test: 300   # needed to support a 99% recall claim with zero misses
+  split:
+    method: group_kfold_by_lot
+    n_folds: 5
+    validation_folds: 1
+    test_folds: 1

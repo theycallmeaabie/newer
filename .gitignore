@@ -1,0 +1,33 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Web
+web/node_modules/
+web/dist/
+web/.vite/
+
+# Generated data and outputs (regenerable from configs + seed)
+data/synthetic/*.csv
+data/synthetic/*.parquet
+data/synthetic/*.png
+reports/*.html
+reports/*.pdf
+audit_log.jsonl
+
+# Blind holdout config lives outside the repo; never commit a copy
+blind*.yaml
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+notebooks/.ipynb_checkpoints/

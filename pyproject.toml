@@ -1,0 +1,103 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "burnin-screen"
+version = "0.1.0"
+description = "AI-driven anomaly detection in component burn-in and screening (SIH 2026, PS 26170)"
+readme = "README.md"
+# Lower bounds are the versions the code is actually exercised against (pandas 3 is a breaking
+# major); exact versions are pinned in requirements.lock, which `make setup` applies.
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "Team SYNTROPIC" }]
+dependencies = [
+  "numpy>=2.3",
+  "pandas>=3.0",
+  "scipy>=1.16",
+  "scikit-learn>=1.7",
+  "lightgbm>=4.6",
+  "shap>=0.50",
+  "pydantic>=2.7",
+  "pyyaml>=6.0",
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "python-multipart>=0.0.9",
+  "jinja2>=3.1",
+  "openpyxl>=3.1",
+  "matplotlib>=3.9",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.2",
+  "pytest-cov>=5.0",
+  "ruff>=0.6",
+  "httpx2>=2.0",   # starlette >= 1.7 TestClient wants httpx2, not httpx
+  "types-PyYAML",
+]
+# PDF export is optional because WeasyPrint needs system libraries (pango, cairo).
+pdf = ["weasyprint>=62"]
+
+[project.scripts]
+burnin = "burnin.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+burnin = ["templates/*.html", "py.typed"]
+
+# --------------------------------------------------------------------------- ruff
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "api", "tests", "scripts"]
+extend-exclude = ["web", "notebooks", ".venv", "data"]
+
+[tool.ruff.lint]
+select = [
+  "E",   # pycodestyle errors
+  "W",   # pycodestyle warnings
+  "F",   # pyflakes
+  "I",   # isort
+  "B",   # bugbear
+  "UP",  # pyupgrade
+  "SIM", # simplify
+  "RUF", # ruff-specific
+  "NPY", # numpy-specific (catches legacy np.random.seed usage)
+  "PD",  # pandas-vet
+  "N",   # pep8-naming
+]
+ignore = [
+  "PD011", # .values is often what we mean
+  "PD015", # pd.merge is fine
+  "N806",  # allow V0, V24 style names in maths-heavy code
+  "N803",  # same, for arguments
+  "RUF012",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B011"]
+"notebooks/**" = ["E402", "F401"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["burnin", "api"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# --------------------------------------------------------------------------- pytest
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra -q --strict-markers"
+markers = [
+  "slow: long-running tests (skipped with -m 'not slow')",
+]
+filterwarnings = [
+  "error::DeprecationWarning:burnin.*",
+  "error::FutureWarning:burnin.*",  # pandas behaviour-change warnings are FutureWarnings
+]

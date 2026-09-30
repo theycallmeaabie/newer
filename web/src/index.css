@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+/* Class-based dark mode so the inspector can toggle it explicitly (projector use),
+   while index.html seeds the class from the OS preference. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* Bind the UA colour scheme (native controls, scrollbars, canvas) to the .dark class rather than
+   the OS preference, so form controls match the Tailwind dark variant when the toggle is used. */
+:root {
+  color-scheme: light;
+}
+:root.dark {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100 antialiased;
+  /* Projector-friendly: slightly larger base size and high contrast. */
+  font-size: 17px;
+}

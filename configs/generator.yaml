@@ -1,0 +1,68 @@
+# Synthetic burn-in data generator configuration.
+#
+# Phase 0: structure and provisional values only. Phase 1 finalises the values and documents
+# every assumption, mechanism and source in data/README.md. Values here are NOT yet sourced.
+#
+# A second config in the same shape, held OUTSIDE the repo and pointed to by the BLIND_CONFIG
+# environment variable, produces the blind holdout. Development code never reads it.
+
+seed: 20260170
+output_dir: data/synthetic
+
+lots:
+  # Phase 1 sizes `count` so that the TEST fold alone holds >= screening.yaml
+  # evaluation.min_defective_parts_in_test defective parts (60 lots x ~150 parts x 2 % is far short).
+  count: 60
+  size_min: 20            # small lots are common in hi-rel procurement and must be represented
+  size_max: 500
+  size_distribution: log_uniform
+
+part_numbers:
+  # Datasheet limits are the static screen. Lot medians vary lot-to-lot (log-normal around
+  # `typical`); the ratio typical/limit leaves room for "anomalous but inside the limit" parts.
+  - name: PN-A
+    parameters:
+      IDDQ:  { unit: uA, typical: 10.0,  limit_max: 50.0, lot_sigma_log: 0.25, part_sigma_log: 0.20 }
+      ILEAK: { unit: uA, typical: 0.5,   limit_max: 5.0,  lot_sigma_log: 0.30, part_sigma_log: 0.25 }
+      TPD:   { unit: ns, typical: 12.0,  limit_max: 20.0, lot_sigma_log: 0.05, part_sigma_log: 0.04 }
+  - name: PN-B
+    parameters:
+      IDDQ:  { unit: uA, typical: 30.0,  limit_max: 100.0, lot_sigma_log: 0.25, part_sigma_log: 0.20 }
+      ILEAK: { unit: uA, typical: 1.0,   limit_max: 10.0,  lot_sigma_log: 0.30, part_sigma_log: 0.25 }
+      TPD:   { unit: ns, typical: 8.0,   limit_max: 14.0,  lot_sigma_log: 0.05, part_sigma_log: 0.04 }
+
+readings:
+  hours: [0, 24, 96, 168]
+  temperature_c: 125.0
+  noise_sigma_log: 0.02           # multiplicative measurement noise
+  missing_fraction: 0.01
+
+healthy_drift:
+  # V(t) = V0 * (1 + a * t^n), mild and sub-linear. TODO(Phase 1): source for a and n ranges.
+  a: { min: 0.001, max: 0.005 }
+  n: { min: 0.3, max: 0.5 }
+
+correlation:
+  # Higher Iddq loosely tied to slower delay; applied to the per-part log baselines.
+  iddq_tpd: 0.3
+  iddq_ileak: 0.4
+
+defects:
+  prevalence: 0.02                # fraction of parts that carry a latent defect
+  # Relative mix of defect types among defective parts. Mechanism notes: data/README.md.
+  mix:
+    baseline_outlier: 0.25
+    accelerating_drift: 0.25
+    excess_linear_drift: 0.20
+    step_change: 0.20
+    multivariate: 0.10
+  step_change:
+    undetectable_at_24h_fraction: 0.5   # step occurs after 24h by construction
+  catastrophic_fraction: 0.002          # fail static limits outright
+
+nuisances:
+  tester_count: 3
+  tester_offset_sigma_log: 0.03
+  whole_lot_shift:
+    probability: 0.05
+    magnitude_log: 0.15
