@@ -61,7 +61,7 @@ def test_configs_parse(repo_root: Path) -> None:
     gen = yaml.safe_load((repo_root / "configs/generator.yaml").read_text())
     scr = yaml.safe_load((repo_root / "configs/screening.yaml").read_text())
     assert isinstance(gen["seed"], int)
-    assert gen["lots"]["size_min"] <= 20 <= 500 <= gen["lots"]["size_max"]
+    assert gen["lots"]["size"]["min"] <= 20 <= 500 <= gen["lots"]["size"]["max"]
     assert abs(sum(gen["defects"]["mix"].values()) - 1.0) < 1e-9
     assert scr["robust_stats"]["mad_scale"] == pytest.approx(1.4826)
     assert scr["evaluation"]["recall_target"] >= 0.99

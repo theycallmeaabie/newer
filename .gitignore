@@ -31,3 +31,8 @@ blind*.yaml
 .idea/
 .DS_Store
 notebooks/.ipynb_checkpoints/
+
+# Blind holdout outputs and regenerable dataset side files (never committed)
+data/blind/
+data/synthetic/limits.yaml
+data/synthetic/manifest.json

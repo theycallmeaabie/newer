@@ -1,68 +1,111 @@
-# Synthetic burn-in data generator configuration.
+# Synthetic burn-in data generator configuration (development dataset).
 #
-# Phase 0: structure and provisional values only. Phase 1 finalises the values and documents
-# every assumption, mechanism and source in data/README.md. Values here are NOT yet sourced.
-#
-# A second config in the same shape, held OUTSIDE the repo and pointed to by the BLIND_CONFIG
-# environment variable, produces the blind holdout. Development code never reads it.
+# Every numeric choice here is an ASSUMPTION unless data/README.md gives a source for it. The
+# blind holdout uses a second file of the same shape kept OUTSIDE the repo (env BLIND_CONFIG).
+# Keys are validated strictly: a misspelt key is an error, not a silent default.
 
 seed: 20260170
 output_dir: data/synthetic
 
-lots:
-  # Phase 1 sizes `count` so that the TEST fold alone holds >= screening.yaml
-  # evaluation.min_defective_parts_in_test defective parts (60 lots x ~150 parts x 2 % is far short).
-  count: 60
-  size_min: 20            # small lots are common in hi-rel procurement and must be represented
-  size_max: 500
-  size_distribution: log_uniform
-
-part_numbers:
-  # Datasheet limits are the static screen. Lot medians vary lot-to-lot (log-normal around
-  # `typical`); the ratio typical/limit leaves room for "anomalous but inside the limit" parts.
-  - name: PN-A
-    parameters:
-      IDDQ:  { unit: uA, typical: 10.0,  limit_max: 50.0, lot_sigma_log: 0.25, part_sigma_log: 0.20 }
-      ILEAK: { unit: uA, typical: 0.5,   limit_max: 5.0,  lot_sigma_log: 0.30, part_sigma_log: 0.25 }
-      TPD:   { unit: ns, typical: 12.0,  limit_max: 20.0, lot_sigma_log: 0.05, part_sigma_log: 0.04 }
-  - name: PN-B
-    parameters:
-      IDDQ:  { unit: uA, typical: 30.0,  limit_max: 100.0, lot_sigma_log: 0.25, part_sigma_log: 0.20 }
-      ILEAK: { unit: uA, typical: 1.0,   limit_max: 10.0,  lot_sigma_log: 0.30, part_sigma_log: 0.25 }
-      TPD:   { unit: ns, typical: 8.0,   limit_max: 14.0,  lot_sigma_log: 0.05, part_sigma_log: 0.04 }
-
-readings:
+time:
   hours: [0, 24, 96, 168]
   temperature_c: 125.0
-  noise_sigma_log: 0.02           # multiplicative measurement noise
-  missing_fraction: 0.01
+  first_lot_start: 2025-01-06
+  lot_spacing_days: { min: 0.0, max: 2.0 }   # lots arrive staggered, so "history" is time-ordered
 
-healthy_drift:
-  # V(t) = V0 * (1 + a * t^n), mild and sub-linear. TODO(Phase 1): source for a and n ranges.
-  a: { min: 0.001, max: 0.005 }
-  n: { min: 0.3, max: 0.5 }
+lots:
+  # Sized so that a one-fifth TEST fold holds >= 300 defective parts (screening.yaml
+  # evaluation.min_defective_parts_in_test): log-uniform 20..500 has mean ~149 parts/lot,
+  # 600 lots ~ 89k parts, 2 % ~ 1.8k defective, 1/5 ~ 360 in the test fold.
+  count: 600
+  size: { min: 20, max: 500, distribution: log_uniform }   # small lots are common in hi-rel
+
+part_numbers:
+  # typical: lot median in canonical units; limit_max: datasheet maximum.
+  # lot_sigma_log: lot-to-lot spread of the median; part_sigma_log: within-lot spread.
+  PN-A:
+    weight: 0.6
+    parameters:
+      IDDQ:  { unit: uA, typical: 10.0, limit_max: 50.0,  lot_sigma_log: 0.25, part_sigma_log: 0.20, noise_sigma_log: 0.02 }
+      ILEAK: { unit: uA, typical: 0.5,  limit_max: 5.0,   lot_sigma_log: 0.30, part_sigma_log: 0.25, noise_sigma_log: 0.03 }
+      TPD:   { unit: ns, typical: 12.0, limit_max: 20.0,  lot_sigma_log: 0.05, part_sigma_log: 0.04, noise_sigma_log: 0.01 }
+  PN-B:
+    weight: 0.4
+    parameters:
+      IDDQ:  { unit: uA, typical: 25.0, limit_max: 150.0, lot_sigma_log: 0.25, part_sigma_log: 0.20, noise_sigma_log: 0.02 }
+      ILEAK: { unit: uA, typical: 1.0,  limit_max: 10.0,  lot_sigma_log: 0.30, part_sigma_log: 0.25, noise_sigma_log: 0.03 }
+      TPD:   { unit: ns, typical: 8.0,  limit_max: 14.0,  lot_sigma_log: 0.05, part_sigma_log: 0.04, noise_sigma_log: 0.01 }
 
 correlation:
-  # Higher Iddq loosely tied to slower delay; applied to the per-part log baselines.
-  iddq_tpd: 0.3
-  iddq_ileak: 0.4
+  # Correlation of per-part log baselines within a lot. IDDQ and ILEAK are both leakage-driven
+  # (strong, positive). IDDQ_TPD follows the build prompt ("higher Iddq loosely tied to slower
+  # delay"); the sign is debatable, see data/README.md.
+  IDDQ_ILEAK: 0.7
+  IDDQ_TPD: 0.3
+  ILEAK_TPD: 0.2
+
+healthy_drift:
+  # V(t) = V0 * (1 + a * (t / t_ref)^n), t_ref = last hour. `a` is the fractional drift at t_ref.
+  lot_sigma_log_a: 0.3
+  part_sigma_log_a: 0.3
+  parameters:
+    IDDQ:  { a: { min: 0.01, max: 0.05 }, n: { min: 0.3, max: 0.5 } }
+    ILEAK: { a: { min: 0.01, max: 0.06 }, n: { min: 0.3, max: 0.5 } }
+    TPD:   { a: { min: 0.00, max: 0.01 }, n: { min: 0.3, max: 0.5 } }
 
 defects:
-  prevalence: 0.02                # fraction of parts that carry a latent defect
-  # Relative mix of defect types among defective parts. Mechanism notes: data/README.md.
-  mix:
+  prevalence: 0.02                     # latent defects (the target of this system)
+  catastrophic_fraction: 0.002         # fail the static limit outright (static screen's baseline)
+  catastrophic_overshoot: { min: 1.2, max: 3.0 }
+  mix:                                  # relative mix among latent defects; sums to 1
     baseline_outlier: 0.25
     accelerating_drift: 0.25
     excess_linear_drift: 0.20
     step_change: 0.20
     multivariate: 0.10
+  parameter_weights: { IDDQ: 0.5, ILEAK: 0.35, TPD: 0.15 }   # which parameter carries the defect
+  baseline_outlier:
+    shift_sigma: { min: 4.0, max: 8.0 }    # above lot median, in part sigmas
+    max_fraction_of_limit: 0.95            # ... but every reading stays inside the datasheet limit
+    min_shift_sigma: 3.0
+  # Drift/step magnitudes are fractions of the reading. Delay has a far narrower spread and far
+  # less datasheet headroom than the currents, so TPD gets its own (much smaller) ranges;
+  # otherwise a TPD "latent" defect would be a 10-25 sigma event that fails the static limit.
+  accelerating_drift:
+    growth: { min: 0.3, max: 2.5 }         # extra growth at t_ref (x1.3 .. x3.5), currents
+    growth_by_parameter:
+      TPD: { min: 0.05, max: 0.30 }        # +5 .. +30 % delay at t_ref
+    # (t/t_ref)^m: with t/t_ref = 24/168 the first reading shows 5.4 % (m = 1.5) down to 0.3 %
+    # (m = 3) of the final growth, i.e. +0.1 % .. +13 % of the reading for the currents.
+    exponent: { min: 1.5, max: 3.0 }
+  excess_linear_drift:
+    growth: { min: 0.3, max: 1.0 }         # +30..100 % at t_ref, linear in t, currents
+    growth_by_parameter:
+      TPD: { min: 0.04, max: 0.20 }
   step_change:
-    undetectable_at_24h_fraction: 0.5   # step occurs after 24h by construction
-  catastrophic_fraction: 0.002          # fail static limits outright
+    jump: { min: 0.4, max: 2.0 }           # x1.4 .. x3, currents
+    jump_by_parameter:
+      TPD: { min: 0.05, max: 0.25 }
+    late_onset_fraction: 0.5               # half jump AFTER the first stressed reading: no early signature
+  multivariate:
+    # Joint distance spans "borderline" to "obvious" on purpose; recall on this type is expected
+    # to be below 100 % and is reported honestly.
+    low_side_z: { min: -2.5, max: -1.0 }   # consistent low side of the IDDQ/ILEAK pair
+    defect_z: { min: 0.75, max: 2.0 }      # one of the pair lifted to the mildly high side
+  extra_modules: []                        # blind team: paths to files defining register(registry)
+  extra: {}                                # parameters for extra defect types, keyed by registered name
 
 nuisances:
-  tester_count: 3
-  tester_offset_sigma_log: 0.03
+  testers:
+    count: 4
+    offset_sigma_log: 0.03                 # per tester per parameter, fixed for the run
   whole_lot_shift:
-    probability: 0.05
-    magnitude_log: 0.15
+    probability: 0.05                      # tester drift or tester change mid-burn-in
+    # magnitude_log applies to tester_drift (one parameter). A tester_change shifts every
+    # parameter by the difference of the two testers' offsets (sigma ~ 0.04 log), so many of
+    # those are small; lot_events.csv records the actual shift of every event.
+    magnitude_log: { min: 0.08, max: 0.20 }
+    kind_weights: { tester_drift: 0.5, tester_change: 0.5 }
+  missing:
+    cell_fraction: 0.005                   # single readings missing at random
+    part_dropout_fraction: 0.003           # parts with no readings after some hour

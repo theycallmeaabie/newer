@@ -76,6 +76,9 @@ ignore = [
   "N806",  # allow V0, V24 style names in maths-heavy code
   "N803",  # same, for arguments
   "RUF012",
+  "RUF001", # µ, σ, ×, — are used deliberately in user-facing strings ...
+  "RUF002", # ... in docstrings ...
+  "RUF003", # ... and in comments
 ]
 
 [tool.ruff.lint.per-file-ignores]
